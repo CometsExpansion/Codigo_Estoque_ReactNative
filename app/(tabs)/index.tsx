@@ -1,70 +1,266 @@
-import { Image, StyleSheet, Platform } from 'react-native';
-
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, FlatList, Alert, StyleSheet, ScrollView } from 'react-native';
+import { Button as PaperButton, Card } from 'react-native-paper';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function HomeScreen() {
+  const [products, setProducts] = useState([]);
+  const [newProductName, setNewProductName] = useState('');
+  const [newProductValue, setNewProductValue] = useState('');
+  const [newProductQuantity, setNewProductQuantity] = useState('');
+  const [editingProduct, setEditingProduct] = useState<string | null>(null);
+  const [editProductName, setEditProductName] = useState('');
+  const [editProductValue, setEditProductValue] = useState('');
+  const [editProductQuantity, setEditProductQuantity] = useState('');
+
+  useEffect(() => {
+    const loadProducts = async () => {
+      try {
+        const storedProducts = await AsyncStorage.getItem('products');
+        if (storedProducts) {
+          setProducts(JSON.parse(storedProducts));
+        }
+      } catch (error) {
+        console.error('Erro ao carregar produtos', error);
+      }
+    };
+
+    loadProducts();
+  }, []);
+
+  const validateProduct = (product) => {
+    return (
+      typeof product.name === 'string' &&
+      typeof product.value === 'number' &&
+      typeof product.quantity === 'number' &&
+      product.name.trim() !== '' &&
+      !isNaN(product.value) &&
+      !isNaN(product.quantity)
+    );
+  };
+
+  const saveProducts = async (productsToSave: any[]) => {
+    try {
+      if (productsToSave.every(validateProduct)) {
+        await AsyncStorage.setItem('products', JSON.stringify(productsToSave));
+      } else {
+        Alert.alert('Erro', 'Produtos inválidos. Verifique os dados e tente novamente.');
+      }
+    } catch (error) {
+      console.error('Erro ao salvar produtos', error);
+      Alert.alert('Erro', 'Não foi possível salvar os produtos.');
+    }
+  };
+
+  const addProduct = () => {
+    if (newProductName.trim() && !isNaN(parseFloat(newProductValue)) && !isNaN(parseInt(newProductQuantity))) {
+      const newProduct = { 
+        id: Date.now().toString(), 
+        name: newProductName, 
+        value: parseFloat(newProductValue), 
+        quantity: parseInt(newProductQuantity)
+      };
+      const updatedProducts = [...products, newProduct];
+      setProducts(updatedProducts);
+      saveProducts(updatedProducts);
+      setNewProductName('');
+      setNewProductValue('');
+      setNewProductQuantity('');
+    } else {
+      Alert.alert('Erro', 'Por favor, insira um nome, valor e quantidade válidos para o produto');
+    }
+  };
+
+  const editProduct = (id: string) => {
+    const product = products.find(p => p.id === id);
+    if (product) {
+      setEditingProduct(id);
+      setEditProductName(product.name);
+      setEditProductValue(product.value.toString());
+      setEditProductQuantity(product.quantity.toString());
+    }
+  };
+
+  const updateProduct = () => {
+    if (editingProduct) {
+      const updatedProducts = products.map(p => 
+        p.id === editingProduct ? { 
+          ...p, 
+          name: editProductName, 
+          value: parseFloat(editProductValue), 
+          quantity: parseInt(editProductQuantity)
+        } : p
+      );
+      setProducts(updatedProducts);
+      saveProducts(updatedProducts);
+      setEditingProduct(null);
+      setEditProductName('');
+      setEditProductValue('');
+      setEditProductQuantity('');
+    }
+  };
+
+  const deleteProduct = (id: string) => {
+    const updatedProducts = products.filter(p => p.id !== id);
+    setProducts(updatedProducts);
+    saveProducts(updatedProducts);
+  };
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({ ios: 'cmd + d', android: 'cmd + m' })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          Tap the Explore tab to learn more about what's included in this starter app.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          When you're ready, run{' '}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Gerenciamento de Estoque</Text>
+      </View>
+
+      <ScrollView contentContainerStyle={styles.scrollContainer}>
+        <View style={styles.formContainer}>
+          <Text style={styles.formTitle}>{editingProduct ? 'Editar Produto' : 'Adicionar Novo Produto'}</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Nome do Produto"
+            value={editingProduct ? editProductName : newProductName}
+            onChangeText={text => editingProduct ? setEditProductName(text) : setNewProductName(text)}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Valor do Produto"
+            value={editingProduct ? editProductValue : newProductValue}
+            keyboardType="numeric"
+            onChangeText={text => editingProduct ? setEditProductValue(text) : setNewProductValue(text)}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Quantidade em Estoque"
+            value={editingProduct ? editProductQuantity : newProductQuantity}
+            keyboardType="numeric"
+            onChangeText={text => editingProduct ? setEditProductQuantity(text) : setNewProductQuantity(text)}
+          />
+          <PaperButton 
+            mode="contained" 
+            onPress={editingProduct ? updateProduct : addProduct} 
+            style={styles.submitButton}
+          >
+            {editingProduct ? 'Atualizar' : 'Adicionar'}
+          </PaperButton>
+        </View>
+
+        <View style={styles.gridContainer}>
+          <FlatList
+            data={products}
+            keyExtractor={item => item.id}
+            numColumns={2}
+            renderItem={({ item }) => (
+              <Card style={styles.card}>
+                <Card.Title 
+                  title={item.name} 
+                  subtitle={`R$${item.value.toFixed(2)} | Qty: ${item.quantity}`} 
+                  titleStyle={styles.cardTitle}
+                  subtitleStyle={styles.cardSubtitle}
+                />
+                <Card.Actions style={styles.cardActions}>
+                  <PaperButton mode="outlined" onPress={() => editProduct(item.id)} style={styles.cardButton}>
+                    Editar
+                  </PaperButton>
+                  <PaperButton mode="outlined" onPress={() => deleteProduct(item.id)} style={styles.cardButton}>
+                    Excluir
+                  </PaperButton>
+                </Card.Actions>
+              </Card>
+            )}
+          />
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
+  container: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    padding: 16,
+  },
+  header: {
+    backgroundColor: '#4a90e2',
+    paddingVertical: 20,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
+    marginBottom: 16,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  headerTitle: {
+    fontSize: 30,
+    fontWeight: '700',
+    color: '#ffffff',
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  scrollContainer: {
+    flexGrow: 1,
+  },
+  formContainer: {
+    padding: 20,
+    backgroundColor: '#f0f4f8',
+    borderRadius: 12,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  formTitle: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  input: {
+    height: 48,
+    borderColor: '#d1d5db',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+    backgroundColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  submitButton: {
+    marginTop: 12,
+    borderRadius: 8,
+  },
+  gridContainer: {
+    flex: 1,
+  },
+  card: {
+    flex: 1,
+    margin: 8,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  cardSubtitle: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  cardActions: {
+    justifyContent: 'space-around',
+    paddingVertical: 10,
+  },
+  cardButton: {
+    marginHorizontal: 8,
   },
 });
